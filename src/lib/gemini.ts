@@ -1,5 +1,5 @@
 
-const GEMINI_API_KEY = "AIzaSyBtE1RWUuABaFzMduTqtDsT2oGCAdn-Qt4";
+const GEMINI_API_KEY = "AIzaSyBoFNwYmuQg7rmZO6LguayckP-3pDRMhqA";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
 export interface GeminiQuestion {
@@ -316,5 +316,54 @@ export const runCodeWithAI = async (
     } catch (error) {
         console.error("Gemini Compiler Error:", error);
         return { passed: false, output: "", error: "Compiler Service Unavailable" };
+    }
+};
+
+export const verifyFaceMatch = async (
+    baselineImage: string,
+    currentImage: string
+): Promise<{ match: boolean; confidence: number; error?: string }> => {
+
+    if (!baselineImage || !currentImage) return { match: false, confidence: 0, error: "Missing image data" };
+
+    const cleanBaseline = baselineImage.split(',')[1] || baselineImage;
+    const cleanCurrent = currentImage.split(',')[1] || currentImage;
+
+    const prompt = `
+    Compare the face in Image A (Baseline) with Image B (Current).
+    Strictly determine if they are the SAME person.
+    Ignore minor variations (glasses, angle, lighting).
+    Return JSON: { "match": true/false, "confidence": 0.0-1.0 }
+    If face not visible in B, match: false.
+    `;
+
+    try {
+        const response = await fetch(GEMINI_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                contents: [{
+                    parts: [
+                        { text: prompt },
+                        { inline_data: { mime_type: "image/jpeg", data: cleanBaseline } },
+                        { inline_data: { mime_type: "image/jpeg", data: cleanCurrent } }
+                    ]
+                }]
+            }),
+        });
+
+        if (!response.ok) throw new Error("Vision API Error");
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        const jsonMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+
+        if (jsonMatch) {
+            const result = JSON.parse(jsonMatch[0]);
+            return { match: !!result.match, confidence: result.confidence || 0 };
+        }
+        return { match: false, confidence: 0, error: "Parse Error" };
+    } catch (error) {
+        console.error("Gemini Vision Error:", error);
+        return { match: true, confidence: 0, error: "Service Error" }; // Fail safe
     }
 };

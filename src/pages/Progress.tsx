@@ -42,14 +42,37 @@ export default function Progress() {
   // Helper to recalculate score if it's 0 (Retroactive Fix)
   const getAttemptScore = (attempt: any) => {
     if (attempt.score > 0) return attempt.score;
-    if (attempt.test_type !== 'aptitude' || !attempt.questions || !attempt.answers) return 0;
+    if (attempt.test_type !== 'aptitude' && attempt.test_type !== 'oa') return 0;
+    if (!attempt.questions || !attempt.answers) return 0;
 
-    // Calculate locally
+    // Calculate locally with robust matching
     let correct = 0;
     attempt.questions.forEach((q: any, i: number) => {
-      const ans = Array.isArray(attempt.answers) ? attempt.answers[i] : (attempt.answers as any)?.[i];
-      const correctIds = q.correctAnswer;
-      if (ans && correctIds && ans.toString().trim().toUpperCase() === correctIds.toString().trim().toUpperCase()) {
+      const userAns = Array.isArray(attempt.answers) ? attempt.answers[i] : (attempt.answers as any)?.[i];
+      if (!userAns || !q.correctAnswer) return;
+
+      const userAnsUpper = String(userAns).toUpperCase();
+      const rawCorrect = String(q.correctAnswer).trim();
+      let correctLetter = "";
+
+      // Strategy 1: Direct Letter match
+      const letterMatch = rawCorrect.match(/^(?:Option\s+)?([A-D])(?:[.)]|$)/i);
+
+      if (letterMatch) {
+        correctLetter = letterMatch[1].toUpperCase();
+      }
+      // Strategy 2: Content Match
+      else if (q.options) {
+        const matchIndex = q.options.findIndex((opt: string) =>
+          opt.trim().toLowerCase() === rawCorrect.toLowerCase() ||
+          rawCorrect.toLowerCase().includes(opt.trim().toLowerCase())
+        );
+        if (matchIndex !== -1) {
+          correctLetter = ["A", "B", "C", "D"][matchIndex];
+        }
+      }
+
+      if (userAnsUpper === correctLetter) {
         correct++;
       }
     });
@@ -407,14 +430,30 @@ export default function Progress() {
                                       </div>
                                     )}
 
-                                    {/* Questions Breakdown */}
                                     {Array.isArray(attempt.questions) && attempt.questions.map((q: any, i: number) => {
                                       const userAnswer = Array.isArray(attempt.answers) ? attempt.answers[i] : (attempt.answers as any)?.[i];
-                                      // Robust matching: Normalize strings
-                                      const normalize = (s: any) => s ? String(s).trim().toLowerCase().replace(/^option\s+/i, '').replace(/^[a-d]\.\s*/i, '') : "";
-                                      const normUser = normalize(userAnswer);
-                                      const normCorrect = normalize(q.correctAnswer);
-                                      const isCorrect = normUser && normCorrect && (normUser === normCorrect || normCorrect.includes(normUser) || normUser.includes(normCorrect));
+
+                                      // Logic to determine if correct (Shared with getAttemptScore)
+                                      let isCorrect = false;
+                                      if (userAnswer && q.correctAnswer) {
+                                        const userAnsUpper = String(userAnswer).toUpperCase();
+                                        const rawCorrect = String(q.correctAnswer).trim();
+                                        let correctLetter = "";
+
+                                        const letterMatch = rawCorrect.match(/^(?:Option\s+)?([A-D])(?:[.)]|$)/i);
+                                        if (letterMatch) {
+                                          correctLetter = letterMatch[1].toUpperCase();
+                                        } else if (q.options) {
+                                          const matchIndex = q.options.findIndex((opt: string) =>
+                                            opt.trim().toLowerCase() === rawCorrect.toLowerCase() ||
+                                            rawCorrect.toLowerCase().includes(opt.trim().toLowerCase())
+                                          );
+                                          if (matchIndex !== -1) {
+                                            correctLetter = ["A", "B", "C", "D"][matchIndex];
+                                          }
+                                        }
+                                        isCorrect = userAnsUpper === correctLetter;
+                                      }
 
                                       return (
                                         <div key={i} className="border p-4 rounded-lg">

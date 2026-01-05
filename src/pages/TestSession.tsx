@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Loader2, ArrowRight, CheckCircle2, Mic, Play, Maximize, Minimize, Monitor } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { generateQuestions, evaluateAnswers, GeminiQuestion, RoundType, runCodeWithAI } from "@/lib/gemini";
+import { generateQuestions, evaluateAnswers, GeminiQuestion, RoundType, runCodeWithAI, verifyFaceMatch } from "@/lib/gemini";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
@@ -65,6 +65,28 @@ export default function TestSession() {
     const [language, setLanguage] = useState("javascript");
     const [submittedCodingIndices, setSubmittedCodingIndices] = useState<Set<number>>(new Set());
 
+    // Templates for each language
+    const LANGUAGE_TEMPLATES: Record<string, string> = {
+        javascript: `function solve() {\n  // Your code here\n  console.log("Hello JavaScript");\n}`,
+        python: `def solve():\n    # Your code here\n    print("Hello Python")`,
+        java: `public class Main {\n    public static void main(String[] args) {\n        // Your code here\n        System.out.println("Hello Java");\n    }\n}`,
+        cpp: `#include <iostream>\n\nint main() {\n    // Your code here\n    std::cout << "Hello C++" << std::endl;\n    return 0;\n}`,
+        c: `#include <stdio.h>\n\nint main() {\n    // Your code here\n    printf("Hello C\\n");\n    return 0;\n}`,
+        html: `<!DOCTYPE html>\n<html>\n<head>\n  <title>Page</title>\n</head>\n<body>\n  <h1>Hello HTML</h1>\n</body>\n</html>`,
+        css: `body {\n  font-family: sans-serif;\n  background-color: #f0f0f0;\n}\n\nh1 {\n  color: #333;\n}`,
+        sql: `SELECT * FROM users WHERE id = 1;`
+    };
+
+    const handleLanguageChange = (val: string) => {
+        setLanguage(val);
+        const newCode = LANGUAGE_TEMPLATES[val] || "";
+        setCode(newCode);
+        // We verify handleAnswerChange is defined later in the component, which is fine for execution time
+        if (typeof handleAnswerChange === 'function') {
+            handleAnswerChange(newCode);
+        }
+    };
+
     // Interview specific state
     const [isListening, setIsListening] = useState(false);
     const [isSpeaking, setIsSpeaking] = useState(false);
@@ -73,6 +95,7 @@ export default function TestSession() {
     const videoRef = useRef<HTMLVideoElement>(null);
     const [stream, setStream] = useState<MediaStream | null>(null);
     const [malpracticeWarnings, setMalpracticeWarnings] = useState(0);
+    const isVerifyingRef = useRef(false);
 
     const [warnings, setWarnings] = useState(0);
     const audioContextRef = useRef<AudioContext | null>(null);
@@ -434,8 +457,32 @@ export default function TestSession() {
     }, [submitting, sessionPhase, answers]);
 
 
-    const checkForMalpractice = () => {
-        // Placeholder for advanced CV checks
+    const checkForMalpractice = async () => {
+        if (!userSnapshot || isVerifyingRef.current || !videoRef.current || !stream) return;
+
+        isVerifyingRef.current = true;
+        try {
+            const canvas = document.createElement("canvas");
+            canvas.width = videoRef.current.videoWidth;
+            canvas.height = videoRef.current.videoHeight;
+            canvas.getContext("2d")?.drawImage(videoRef.current, 0, 0);
+            const currentFrame = canvas.toDataURL("image/jpeg");
+
+            // Verify with Gemini Vision
+            const result = await verifyFaceMatch(userSnapshot, currentFrame);
+
+            if (!result.match) {
+                // If confidence is 0, it might be an error or no face, we can be lenient or strict.
+                // Prompt says "If Image B is black, blurry, or has NO face, return match: false."
+                // "mismatched with the live recording" implies identity check.
+                // We'll warn.
+                handleMalpractice("Face Verification Failed: " + (result.error || "Identity Mismatch"));
+            }
+        } catch (e) {
+            console.error("Proctoring Check Failed", e);
+        } finally {
+            isVerifyingRef.current = false;
+        }
     };
 
     const fetchQuestions = async () => {
@@ -513,12 +560,36 @@ export default function TestSession() {
             // Evaluation Logic
             let calculatedScore = 0;
             // Basic scoring for MCQs in OA
+            // Basic scoring for MCQs in OA
             if (isOA) {
                 let correctCount = 0;
                 questions.forEach((q, idx) => {
-                    const ans = finalAnswers[idx];
-                    if (q.type === 'multiple-choice' && ans && q.correctAnswer && ans.toUpperCase() === q.correctAnswer.toUpperCase()) {
-                        correctCount++;
+                    const userAns = finalAnswers[idx]?.toUpperCase();
+                    if (q.type === 'multiple-choice' && userAns && q.correctAnswer) {
+                        const rawCorrect = q.correctAnswer.trim();
+                        let correctLetter = "";
+
+                        // Strategy 1: Direct Letter "A" or "A." or "A)" or "Option A"
+                        // Regex looks for start, optional "Option ", capturing group for A-D, optional dot/paren, end or space
+                        const letterMatch = rawCorrect.match(/^(?:Option\s+)?([A-D])(?:[.)]|$)/i);
+
+                        if (letterMatch) {
+                            correctLetter = letterMatch[1].toUpperCase();
+                        }
+                        // Strategy 2: Content Match (if rawCorrect is the full text)
+                        else if (q.options) {
+                            const matchIndex = q.options.findIndex(opt =>
+                                opt.trim().toLowerCase() === rawCorrect.toLowerCase() ||
+                                rawCorrect.toLowerCase().includes(opt.trim().toLowerCase())
+                            );
+                            if (matchIndex !== -1) {
+                                correctLetter = ["A", "B", "C", "D"][matchIndex];
+                            }
+                        }
+
+                        if (userAns === correctLetter) {
+                            correctCount++;
+                        }
                     }
                 });
                 calculatedScore = Math.round((correctCount / questions.length) * 100);
@@ -848,14 +919,17 @@ export default function TestSession() {
                                             <div className="bg-muted px-4 py-2 text-xs font-mono border-b flex justify-between items-center">
                                                 <div className="flex items-center gap-2">
                                                     <span className="text-muted-foreground">Language:</span>
-                                                    <Select value={language} onValueChange={setLanguage}>
-                                                        <SelectTrigger className="h-6 w-[120px] text-xs"><SelectValue /></SelectTrigger>
+                                                    <Select value={language} onValueChange={handleLanguageChange}>
+                                                        <SelectTrigger className="h-6 w-[140px] text-xs"><SelectValue /></SelectTrigger>
                                                         <SelectContent>
                                                             <SelectItem value="javascript">JavaScript</SelectItem>
                                                             <SelectItem value="python">Python</SelectItem>
                                                             <SelectItem value="java">Java</SelectItem>
                                                             <SelectItem value="cpp">C++</SelectItem>
                                                             <SelectItem value="c">C</SelectItem>
+                                                            <SelectItem value="html">HTML</SelectItem>
+                                                            <SelectItem value="css">CSS</SelectItem>
+                                                            <SelectItem value="sql">SQL</SelectItem>
                                                         </SelectContent>
                                                     </Select>
                                                 </div>

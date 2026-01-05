@@ -1,73 +1,90 @@
-# Welcome to your Lovable project
+# Project Overview
 
-## Project info
+## Project Info
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+**Live URL**: [https://your-deployed-url-here](https://your-deployed-url-here)
 
-## How can I edit this code?
+This project is a modern web application built and maintained independently, using a fast and scalable frontend stack.
 
-There are several ways of editing your application.
 
-**Use Lovable**
+## How to Edit and Run This Project Locally
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+You can work on this project locally using your preferred IDE.
 
-Changes made via Lovable will be committed automatically to this repo.
+### Prerequisites
 
-**Use your preferred IDE**
+Make sure the following are installed on your system:
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+* Node.js (LTS recommended)
+* npm (comes with Node.js)
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+> Tip: You can install Node.js using a version manager like `nvm` for better control.
 
-Follow these steps:
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+### Local Setup Steps
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+# Step 1: Clone the repository
+git clone <https://github.com/ExploitXpert0309/InstaPrep>
 
-# Step 3: Install the necessary dependencies.
-npm i
+# Step 2: Navigate into the project directory
+cd <prep-pal-main>
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Step 3: Install dependencies
+npm install
+
+# Step 4: Start the development server
 npm run dev
-```
 
-**Edit a file directly in GitHub**
+After running the dev server, the app will be available at:
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+http://localhost:8086/
 
-**Use GitHub Codespaces**
+with hot-reloading enabled for faster development.
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
 
-## What technologies are used for this project?
+## Project Structure (High Level)
 
-This project is built with:
+* `src/` – Application source code
+* `components/` – Reusable UI components
+* `pages/` or `routes/` – Application views
+* `assets/` – Static assets
+* `vite.config.ts` – Vite configuration
+* `tsconfig.json` – TypeScript configuration
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
 
-## How can I deploy this project?
+## Technologies Used
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+This project is built using:
 
-## Can I connect a custom domain to my Lovable project?
+* Vite
+* TypeScript
+* React
+* Tailwind CSS
+* shadcn/ui
 
-Yes, you can!
+---
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## Build for Production
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+To create an optimized production build:
+
+npm run build
+
+To preview the production build locally:
+
+npm run preview
+
+## Deployment
+
+This project can be deployed on any modern hosting platform that supports static sites or Node-based builds, such as:
+
+* Vercel
+* Netlify
+* Cloudflare Pages
+* Any custom server or cloud provider
+
+Deployment steps generally involve:
+
+1. Installing dependencies
+2. Running the build command
+3. Serving the generated output

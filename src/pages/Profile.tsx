@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Save, Edit2, Loader2, Link as LinkIcon } from "lucide-react";
+import { ArrowLeft, Save, Edit2, Loader2, Link as LinkIcon, Camera } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client"; // Import Supabase Client
 
@@ -27,7 +27,8 @@ export default function Profile() {
         education: "",
         field_of_study: "",
         bio: "",
-        avatar_url: ""
+        avatar_url: "",
+        cover_url: ""
     });
 
     // Initialize form with profile data
@@ -38,7 +39,8 @@ export default function Profile() {
                 education: profile.education || "",
                 field_of_study: profile.field_of_study || "",
                 bio: profile.bio || "",
-                avatar_url: profile.avatar_url || ""
+                avatar_url: profile.avatar_url || "",
+                cover_url: profile.cover_url || ""
             });
         }
     }, [profile]);
@@ -58,7 +60,7 @@ export default function Profile() {
 
             const file = event.target.files[0];
             const fileExt = file.name.split('.').pop();
-            const filePath = `${user?.id}-${Math.random()}.${fileExt}`;
+            const filePath = `${user?.id}-avatar-${Math.random()}.${fileExt}`;
 
             const { error: uploadError } = await supabase.storage
                 .from('avatars')
@@ -73,7 +75,7 @@ export default function Profile() {
             setFormData(prev => ({ ...prev, avatar_url: data.publicUrl }));
 
             toast({
-                title: "Image Uploaded",
+                title: "Avatar Uploaded",
                 description: "Don't forget to save your profile changes!",
             });
 
@@ -82,6 +84,47 @@ export default function Profile() {
             toast({
                 title: "Upload Failed",
                 description: error.message || "Error uploading avatar.",
+                variant: "destructive",
+            });
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const uploadCover = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        try {
+            setUploading(true);
+
+            if (!event.target.files || event.target.files.length === 0) {
+                throw new Error('You must select an image to upload.');
+            }
+
+            const file = event.target.files[0];
+            const fileExt = file.name.split('.').pop();
+            const filePath = `${user?.id}-cover-${Math.random()}.${fileExt}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from('avatars')
+                .upload(filePath, file);
+
+            if (uploadError) {
+                throw uploadError;
+            }
+
+            const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
+
+            setFormData(prev => ({ ...prev, cover_url: data.publicUrl }));
+
+            toast({
+                title: "Cover Photo Uploaded",
+                description: "Don't forget to save your profile changes!",
+            });
+
+        } catch (error: any) {
+            console.error(error);
+            toast({
+                title: "Upload Failed",
+                description: error.message || "Error uploading cover photo.",
                 variant: "destructive",
             });
         } finally {
@@ -135,7 +178,31 @@ export default function Profile() {
 
                     {/* Identity Card */}
                     <Card className="overflow-hidden">
-                        <div className="h-32 bg-gradient-to-r from-purple-500 to-blue-500 relative"></div>
+                        <div className="h-32 relative group">
+                            {formData.cover_url ? (
+                                <img src={formData.cover_url} alt="Cover" className="w-full h-full object-cover" />
+                            ) : (
+                                <div className="w-full h-full bg-gradient-to-r from-purple-500 to-blue-500"></div>
+                            )}
+
+                            {isEditing && (
+                                <div className="absolute top-2 right-2">
+                                    <Label htmlFor="cover-upload" className="cursor-pointer">
+                                        <div className="bg-black/40 hover:bg-black/60 text-white p-2 rounded-full transition-colors backdrop-blur-sm">
+                                            <Camera className="h-4 w-4" />
+                                        </div>
+                                    </Label>
+                                    <Input
+                                        id="cover-upload"
+                                        type="file"
+                                        className="hidden"
+                                        accept="image/*"
+                                        onChange={uploadCover}
+                                        disabled={uploading}
+                                    />
+                                </div>
+                            )}
+                        </div>
                         <CardContent className="pt-0 relative px-6 md:px-10 pb-8">
                             <div className="flex flex-col md:flex-row gap-6 items-start -mt-12">
                                 <div className="relative group">
