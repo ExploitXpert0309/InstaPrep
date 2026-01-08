@@ -35,9 +35,12 @@ export default function Progress() {
   });
 
   // Filter out attempts that are "soft deleted" (marked as disqualified with reason 'user_deleted')
+  /* 
   const visibleAttempts = attempts?.filter(
     (a) => !(a.status === "disqualified" && a.disqualification_reason === "user_deleted")
   ) || [];
+  */
+  const visibleAttempts = attempts || [];
 
   // Helper to recalculate score if it's 0 (Retroactive Fix)
   const getAttemptScore = (attempt: any) => {
@@ -209,27 +212,51 @@ export default function Progress() {
           </div>
 
           {attempts && attempts.length > 0 && (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive" size="sm" className="gap-2">
-                  <Trash2 className="h-4 w-4" /> Clear History
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This action cannot be undone. This will permanently delete your entire test history and analysis data.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleClearHistory} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                    Yes, Clear History
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={async () => {
+                  const { error } = await supabase
+                    .from("test_attempts")
+                    .update({ status: 'completed', disqualification_reason: null })
+                    .eq("user_id", user?.id)
+                    .eq("disqualification_reason", "user_deleted");
+
+                  if (!error) {
+                    queryClient.invalidateQueries({ queryKey: ["test-attempts", user?.id] });
+                    toast({ title: "History Restored", description: "Your previous test results have been recovered." });
+                  } else {
+                    toast({ title: "Error", description: "Failed to restore history.", variant: "destructive" });
+                  }
+                }}
+              >
+                Restore History
+              </Button>
+
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" size="sm" className="gap-2">
+                    <Trash2 className="h-4 w-4" /> Clear History
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This action cannot be undone. This will permanently delete your entire test history and analysis data.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleClearHistory} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                      Yes, Clear History
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
           )}
         </div>
       </header>
@@ -455,10 +482,20 @@ export default function Progress() {
                                         isCorrect = userAnsUpper === correctLetter;
                                       }
 
+                                      const questionScores = (attempt.ai_feedback as any)?.questionScores;
+                                      const qScore = questionScores?.[i];
+
                                       return (
                                         <div key={i} className="border p-4 rounded-lg">
                                           <div className="flex justify-between gap-2 mb-2">
-                                            <h5 className="font-medium text-sm">Q{i + 1}: {q.question}</h5>
+                                            <div className="flex items-center gap-2">
+                                              <h5 className="font-medium text-sm">Q{i + 1}: {q.question}</h5>
+                                              {typeof qScore === 'number' && (
+                                                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                                  Score: {qScore}/10
+                                                </Badge>
+                                              )}
+                                            </div>
                                             {attempt.test_type === 'aptitude' || attempt.test_type === 'oa' ? ( // Check OA/Aptitude
                                               isCorrect ?
                                                 <Badge variant="default" className="bg-green-500"><CheckCircle className="w-3 h-3 mr-1" /> Correct</Badge> :

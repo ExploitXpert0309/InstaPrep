@@ -21,6 +21,7 @@ export interface GeminiQuestion {
 export interface GeminiEvaluation {
     feedback: string;
     score?: number; // Optional score for aptitude
+    questionScores?: number[]; // New: Granular scores
 }
 
 export type RoundType = "oa" | "tech1" | "tech2" | "behavioral" | "hr";
@@ -28,7 +29,8 @@ export type RoundType = "oa" | "tech1" | "tech2" | "behavioral" | "hr";
 export const generateQuestions = async (
     role: string,
     round: RoundType, // Changed from type to round
-    param: number = 20 // count for OA, duration (mins) for others
+    param: number = 20, // count for OA, duration (mins) for others
+    difficulty: string = "Medium" // New Parameter
 ): Promise<{ questions: GeminiQuestion[]; timeLimit?: number }> => {
 
     let systemPrompt = "";
@@ -49,7 +51,7 @@ export const generateQuestions = async (
         const mcqCount = count - codingCount;
 
         systemPrompt = `You are an expert Online Assessment (OA) creator. Generate a screening test for ${role}.
-    Difficulty: Easy-Medium.
+    Difficulty: ${difficulty}.
     Source: Competitive Programming (Codeforces/LeetCode) + CS Fundamentals (GATE/Placement Papers).
     
     Structure:
@@ -66,6 +68,7 @@ export const generateQuestions = async (
     } else if (round === "tech1") {
         // Technical Round 1 - Core Skills
         systemPrompt = `You are a Technical Interviewer (Round 1). Generate ${count} core technical questions for ${role}.
+    Difficulty: ${difficulty}.
     Focus:
     - Programming Basics (Python/Java/C++)
     - DSA (Arrays, Strings, Trees, Recursion)
@@ -78,16 +81,17 @@ export const generateQuestions = async (
         userPrompt = `Generate ${count} Round 1 interview questions for ${role}. JSON Format.`;
 
     } else if (round === "tech2") {
-        // Technical Round 2 - Deep Dive
-        systemPrompt = `You are a Senior Technical Interviewer (Round 2). Generate ${count} Medium Level questions for ${role}.
+        // Technical Round 2 - Avanced
+        systemPrompt = `You are a Senior Engineer (Round 2). Generate ${count} advanced technical questions for ${role}.
+    Difficulty: ${difficulty}.
     Focus:
-    - Project Deep Dives (Optimization, Scalability)
-    - Edge Cases & Complex Logic
-    - Advanced DSA or Framework internals
+    - Advanced DSA (Graphs, DP, Tries)
+    - Scalable System Design & Architecture
+    - Threading, Concurrency, Low-level details.
     
     CRITICAL:
-    1. Questions should be open-ended but specific.
-    2. Include 1-2 "Live Coding" scenarios (set "type": "coding").`;
+    1. Include at least 1 complex system design scenario.
+    2. Questions should probe depth of knowledge.`;
 
         userPrompt = `Generate ${count} Round 2 interview questions for ${role}. JSON Format.`;
 
@@ -194,9 +198,10 @@ export const generateQuestions = async (
             type: q.type || (round === 'oa' ? 'multiple-choice' : 'technical') // Default fallback
         }));
 
-        // Time Calculation: DIRECT from AI (No Buffer) as requested
-        // Fallback: 1 minute per question if AI result is missing/zero
-        const aiTime = result.expectedTime ? Math.round(result.expectedTime) : (round === 'oa' ? Math.ceil(param * 1.0) : param);
+        // Time Calculation: 
+        // For Interviews (non-OA): The 'param' IS the user-selected duration. We must respect it.
+        // For OA: The 'param' is question count, so we rely on AI's estimate or a fallback heuristic.
+        const aiTime = round !== 'oa' ? param : (result.expectedTime ? Math.round(result.expectedTime) : Math.ceil(param * 1.5));
 
         return {
             questions: result.questions,
@@ -217,28 +222,28 @@ export const evaluateAnswers = async (
 ): Promise<GeminiEvaluation> => {
 
     const prompt = `
-    I am looking for feedback on a ${type} test for the role of ${role}.
-    Here are the questions and the candidate's answers:
+    You are a Senior Interviewer evaluating a candidate's submission for a ${type} round (${role}).
     
-    ${questions.map((q, i) => `Q${i + 1} [${q.type}]: ${q.question}\nCorrect/Expected: ${q.correctAnswer || q.expectedTopics?.join(", ") || "Code Solution"}\nCandidate Answer: ${answers[i] || "Skipped"}`).join("\n\n")}
+    Candidate's Answers:
+    ${questions.map((q, i) => `Q${i + 1} [${q.type}]: ${q.question}\nExpected: ${q.correctAnswer || q.expectedTopics?.join(", ") || "Code Solution"}\nCandidate Answer: ${answers[i] || "Skipped"}`).join("\n\n")}
     
-    Provide ONLY a textual summary of the candidate's performance.
-    CRITICAL INSTRUCTIONS:
-    1. Feedback MUST be 2-3 lines maximum.
-    2. Do NOT provide question-by-question analysis.
-    3. Focus only on overall strengths/weaknesses.
-    4. No markdown lists or long paragraphs. Just a short paragraph.
+    TASK: 
+    1. Provide a concise performance assessment (max 3-4 sentences).
+    2. Assign a score (0-10) for EACH question based on correctness and quality.
     
-    For 'multiple-choice', calculate score (1 point each).
-    For 'coding', evaluate the code correctness, efficiency, and logic (5 points each).
-    For 'interview', evaluate quality.
+    STYLE GUIDELINES (CRITICAL):
+    1. Act as an Interviewer giving a verdict.
+    2. Be specific: "The candidate performed well on X but struggled with Y." or "Answer to Q2 was incorrect because..."
+    3. DO NOT give a generic "study guide" or list of topics to prepare. Focus ONLY on how they performed on THESE specific questions.
+    4. Mention if the code was efficient or if the behavioral answer lacked depth.
     
     Response Format (JSON):
     {
-      "feedback": "Overall summary (max 40 words)...",
-      "score": 15
+      "feedback": "Your evaluation here...",
+      "score": 0-100,
+      "questionScores": [8, 5, 0, 10] // Array of scores matching question order (Max 10 per question)
     }
-  `;
+    `;
 
     try {
         const response = await fetch(GEMINI_URL, {

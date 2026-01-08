@@ -33,6 +33,9 @@ export default function TestSession() {
     const roundType = (searchParams.get("type") || "oa") as RoundType;
     const isOA = roundType === "oa"; // Online Assessment Check
 
+    // Read difficulty level (default to Medium)
+    const level = searchParams.get("level") || "Medium";
+
     // Count is passed for OA, but we might want to ignore it for interviews where it is calculated
     const countParam = searchParams.get("count");
     const paramValue = countParam ? parseInt(countParam) : 20;
@@ -462,6 +465,7 @@ export default function TestSession() {
 
         isVerifyingRef.current = true;
         try {
+            // console.log("Proctoring: Verifying face identity...");
             const canvas = document.createElement("canvas");
             canvas.width = videoRef.current.videoWidth;
             canvas.height = videoRef.current.videoHeight;
@@ -470,8 +474,10 @@ export default function TestSession() {
 
             // Verify with Gemini Vision
             const result = await verifyFaceMatch(userSnapshot, currentFrame);
+            // console.log("Proctoring Result:", result);
 
             if (!result.match) {
+                console.warn("Proctoring Mismatch:", result);
                 // If confidence is 0, it might be an error or no face, we can be lenient or strict.
                 // Prompt says "If Image B is black, blurry, or has NO face, return match: false."
                 // "mismatched with the live recording" implies identity check.
@@ -487,7 +493,7 @@ export default function TestSession() {
 
     const fetchQuestions = async () => {
         try {
-            const data = await generateQuestions(role!, roundType, paramValue);
+            const data = await generateQuestions(role!, roundType, paramValue, level);
             setQuestions(data.questions);
             setAnswers(new Array(data.questions.length).fill(""));
 
@@ -623,7 +629,11 @@ export default function TestSession() {
                     disqualification_reason: disqualified ? "malpractice" : null,
                     questions: questions as any,
                     answers: finalAnswers as any,
-                    ai_feedback: { feedback: evaluation.feedback } as any // Wrap in object for JSONB compatibility
+                    ai_feedback: {
+                        feedback: evaluation.feedback,
+                        score: evaluation.score,
+                        questionScores: evaluation.questionScores
+                    } as any // Wrap in object for JSONB compatibility
                 });
 
                 if (insertError) {
@@ -908,9 +918,9 @@ export default function TestSession() {
                                 </div>
                                 <CardTitle className="text-xl">{currentQuestion.question}</CardTitle>
                             </CardHeader>
-                            <CardContent className="flex-1 space-y-6 flex flex-col">
+                            <CardContent className="flex-1 space-y-6 flex flex-col overflow-y-auto">
                                 {isCodingQuestion ? (
-                                    <div className="flex flex-col h-full gap-4">
+                                    <div className="flex flex-col flex-1 min-h-0 gap-4">
                                         <div className="bg-muted p-4 rounded-lg text-sm font-mono whitespace-pre-wrap">
                                             {currentQuestion.constraints && <p><strong>Constraints:</strong> {currentQuestion.constraints}</p>}
                                             {currentQuestion.testCases?.[0] && <p><strong>Example:</strong> {currentQuestion.testCases[0].input} -&gt; {currentQuestion.testCases[0].output}</p>}

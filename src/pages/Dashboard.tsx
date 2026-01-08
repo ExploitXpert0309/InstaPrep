@@ -10,6 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // Round Configuration
 const ROUNDS = [
@@ -90,6 +91,8 @@ export default function Dashboard() {
   const [openCombobox, setOpenCombobox] = useState(false);
   const [roleSearch, setRoleSearch] = useState(""); // For the input text in combobox
 
+
+
   // State to store input values for each round: { oa: 20, tech1: 30, ... }
   const [roundParams, setRoundParams] = useState<Record<string, number>>({
     oa: 20,
@@ -98,6 +101,8 @@ export default function Dashboard() {
     behavioral: 20,
     hr: 15
   });
+
+  const [difficulty, setDifficulty] = useState("Medium");
 
   const handleSignOut = async () => {
     await signOut();
@@ -113,7 +118,7 @@ export default function Dashboard() {
 
   const startRound = (roundId: string) => {
     const param = roundParams[roundId];
-    navigate(`/test-session?role=${encodeURIComponent(role)}&type=${roundId}&count=${param}`);
+    navigate(`/test-session?role=${encodeURIComponent(role)}&type=${roundId}&count=${param}&level=${difficulty}`);
   };
 
   return (
@@ -233,6 +238,20 @@ export default function Dashboard() {
           </Popover>
         </div>
 
+
+
+        {/* Difficulty Selection */}
+        <div className="max-w-md space-y-2 animate-fade-in" style={{ animationDelay: '150ms' }}>
+          <Label>Difficulty Level</Label>
+          <Tabs defaultValue="Medium" onValueChange={setDifficulty} className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="Easy">Easy</TabsTrigger>
+              <TabsTrigger value="Medium">Medium</TabsTrigger>
+              <TabsTrigger value="Hard">Hard</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+
         {/* Rounds Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {ROUNDS.map((round, index) => {
@@ -301,7 +320,7 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </div>
-      </main>
-    </div>
+      </main >
+    </div >
   );
 }
